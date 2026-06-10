@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f0e0c" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Pool Tracker" />
+  <title>WC 2026 Pool Tracker · Orosz</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230f0e0c'/%3E%3Ctext x='50%25' y='56%25' font-family='ui-monospace,monospace' font-size='18' font-weight='700' fill='%23e8b23a' text-anchor='middle' dominant-baseline='middle'%3E48%3C/text%3E%3C/svg%3E" />
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #0f0e0c; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      color: #f0ebdf;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    .mono { font-family: ui-monospace, 'SF Mono', 'Menlo', 'Roboto Mono', monospace; font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+    .eyebrow { letter-spacing: 0.18em; text-transform: uppercase; font-size: 10px; font-weight: 500; }
+    button { -webkit-tap-highlight-color: transparent; font-family: inherit; }
+    button:focus-visible { outline: 2px solid #e8b23a; outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect } = React;
+
+    const TEAMS = [
+      ['Spain', 1, 'H'], ['France', 2, 'I'], ['England', 3, 'L'], ['Argentina', 4, 'J'],
+      ['Brazil', 5, 'C'], ['Germany', 6, 'E'], ['Portugal', 7, 'K'], ['Netherlands', 8, 'F'],
+      ['Belgium', 9, 'G'], ['Mexico', 10, 'A'], ['Morocco', 11, 'C'], ['Croatia', 12, 'L'],
+      ['Uruguay', 13, 'H'], ['USA', 14, 'D'], ['Japan', 15, 'F'], ['Colombia', 16, 'K'],
+      ['Senegal', 17, 'I'], ['Norway', 18, 'I'], ['Switzerland', 19, 'B'], ['Canada', 20, 'B'],
+      ['Ecuador', 21, 'E'], ['Egypt', 22, 'G'], ['Türkiye', 23, 'D'], ['Sweden', 24, 'F'],
+      ['Austria', 25, 'J'], ['South Korea', 26, 'A'], ['Paraguay', 27, 'D'], ['Iran', 28, 'G'],
+      ['Australia', 29, 'D'], ['Bosnia & Herzegovina', 30, 'B'], ['Scotland', 31, 'C'], ['Ivory Coast', 32, 'E'],
+      ['Czechia', 33, 'A'], ['Algeria', 34, 'J'], ['Qatar', 35, 'B'], ['DR Congo', 36, 'K'],
+      ['Ghana', 37, 'L'], ['Tunisia', 38, 'F'], ['Saudi Arabia', 39, 'H'], ['South Africa', 40, 'A'],
+      ['Panama', 41, 'L'], ['Cape Verde', 42, 'H'], ['Jordan', 43, 'J'], ['Uzbekistan', 44, 'K'],
+      ['New Zealand', 45, 'G'], ['Iraq', 46, 'I'], ['Haiti', 47, 'C'], ['Curaçao', 48, 'E'],
+    ];
+
+    const ADV = [
+      { label: 'Out', cum: 0 },
+      { label: 'R32', cum: 3 },
+      { label: 'R16', cum: 8 },
+      { label: 'QF',  cum: 16 },
+      { label: 'SF',  cum: 28 },
+      { label: 'F',   cum: 46 },
+      { label: 'W',   cum: 71 },
+    ];
+
+    const STORAGE_KEY = 'wc2026-tracker-v1';
+
+    const defaultState = () => {
+      const s = {};
+      for (const [name] of TEAMS) s[name] = { w: 0, d: 0, adv: 0 };
+      return s;
+    };
+
+    const baseScore = ({ w, d, adv }) => w * 3 + d * 1 + ADV[adv].cum;
+
+    const COLORS = {
+      bg: '#0f0e0c',
+      surface: '#15130f',
+      surfaceAlt: '#1a1814',
+      border: '#1f1c16',
+      borderAlt: '#2a261f',
+      text: '#f0ebdf',
+      muted: '#8a8170',
+      faint: '#5a5247',
+      ghost: '#3a3429',
+      gold: '#e8b23a',
+    };
+
+    function App() {
+      const [data, setData] = useState(defaultState);
+      const [sortBy, setSortBy] = useState('rank');
+      const [expanded, setExpanded] = useState(null);
+      const [loaded, setLoaded] = useState(false);
+
+      useEffect(() => {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) setData({ ...defaultState(), ...JSON.parse(raw) });
+        } catch (e) {}
+        setLoaded(true);
+      }, []);
+
+      useEffect(() => {
+        if (!loaded) return;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+      }, [data, loaded]);
+
+      const update = (name, patch) =>
+        setData(prev => ({ ...prev, [name]: { ...prev[name], ...patch } }));
+
+      const rows = TEAMS.map(([name, rank, group]) => {
+        const t = data[name] || { w: 0, d: 0, adv: 0 };
+        const base = baseScore(t);
+        const mult = 49 - rank;
+        return { name, rank, group, ...t, base, mult, contrib: base * mult };
+      });
+
+      const total = rows.reduce((s, r) => s + r.contrib, 0);
+      const scoringCount = rows.filter(r => r.contrib > 0).length;
+      const topRow = [...rows].sort((a, b) => b.contrib - a.contrib)[0];
+
+      const sorted = [...rows];
+      if (sortBy === 'rank') sorted.sort((a, b) => a.rank - b.rank);
+      if (sortBy === 'contrib') sorted.sort((a, b) => b.contrib - a.contrib || a.rank - b.rank);
+      if (sortBy === 'group') sorted.sort((a, b) => a.group.localeCompare(b.group) || a.rank - b.rank);
+
+      const handleReset = () => {
+        if (window.confirm('Clear all results? Your team ranking is preserved.')) {
+          setData(defaultState());
+          setExpanded(null);
+        }
+      };
+
+      return (
+        <div style={{ minHeight: '100vh', background: COLORS.bg, color: COLORS.text }}>
+          <div style={{
+            position: 'sticky', top: 0, zIndex: 10,
+            background: COLORS.bg,
+            borderBottom: `1px solid ${COLORS.borderAlt}`,
+          }}>
+            <div style={{ padding: '16px 16px 12px', maxWidth: 640, margin: '0 auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <div className="eyebrow" style={{ color: COLORS.muted }}>Orosz · World Cup 2026</div>
+                <button
+                  onClick={handleReset}
+                  className="eyebrow"
+                  style={{ color: COLORS.faint, background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}
+                >Reset</button>
+              </div>
+
+              <div style={{ marginTop: 8 }}>
+                <div className="eyebrow" style={{ color: COLORS.muted }}>Your Score</div>
+                <div className="mono" style={{
+                  fontSize: 56, lineHeight: 1, fontWeight: 500,
+                  color: total > 0 ? COLORS.gold : COLORS.ghost,
+                  letterSpacing: '-0.02em', marginTop: 4,
+                }}>
+                  {total.toLocaleString()}
+                </div>
+                <div className="mono" style={{ fontSize: 12, color: COLORS.muted, marginTop: 6 }}>
+                  {scoringCount === 0
+                    ? 'No results yet. Tap a team to log group games or knockout progress.'
+                    : `Top: ${topRow.name.toUpperCase()} +${topRow.contrib.toLocaleString()} · ${scoringCount} of 48 scoring`}
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16, display: 'flex', gap: 4 }}>
+                {[
+                  { k: 'rank', label: 'My Rank' },
+                  { k: 'contrib', label: 'Contribution' },
+                  { k: 'group', label: 'Group' },
+                ].map(t => (
+                  <button
+                    key={t.k}
+                    onClick={() => setSortBy(t.k)}
+                    className="eyebrow"
+                    style={{
+                      flex: 1, padding: '9px 0', cursor: 'pointer',
+                      background: sortBy === t.k ? COLORS.surfaceAlt : 'transparent',
+                      color: sortBy === t.k ? COLORS.gold : COLORS.muted,
+                      border: `1px solid ${sortBy === t.k ? COLORS.borderAlt : COLORS.border}`,
+                      borderRadius: 2,
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ maxWidth: 640, margin: '0 auto' }}>
+            {sorted.map(r => (
+              <Row
+                key={r.name}
+                r={r}
+                open={expanded === r.name}
+                onToggle={() => setExpanded(expanded === r.name ? null : r.name)}
+                onUpdate={(patch) => update(r.name, patch)}
+              />
+            ))}
+          </div>
+
+          <div className="eyebrow" style={{
+            padding: '24px 16px 32px', textAlign: 'center', color: COLORS.ghost,
+          }}>
+            80 pts max base · 1–48× multiplier · saved to this device
+          </div>
+        </div>
+      );
+    }
+
+    function Row({ r, open, onToggle, onUpdate }) {
+      const contribColor = r.contrib > 0 ? COLORS.gold : COLORS.faint;
+
+      return (
+        <div style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+          <button
+            onClick={onToggle}
+            style={{
+              width: '100%', textAlign: 'left', padding: '14px 16px',
+              background: open ? COLORS.surface : 'transparent',
+              border: 'none', cursor: 'pointer', color: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}
+          >
+            <div className="mono" style={{ width: 26, color: COLORS.faint, fontSize: 12 }}>
+              {r.rank.toString().padStart(2, '0')}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span style={{
+                  fontWeight: 500, fontSize: 15,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{r.name}</span>
+                <span className="eyebrow" style={{ color: COLORS.faint }}>{r.group}</span>
+              </div>
+              <div className="mono" style={{ color: COLORS.muted, fontSize: 11, marginTop: 3 }}>
+                base {r.base} · ×{r.mult}{r.adv > 0 ? ` · ${ADV[r.adv].label}` : ''}
+              </div>
+            </div>
+            <div className="mono" style={{
+              color: contribColor, fontSize: 17, fontWeight: 500, textAlign: 'right',
+            }}>
+              {r.contrib.toLocaleString()}
+            </div>
+          </button>
+
+          {open && (
+            <div style={{ padding: '4px 16px 16px', background: COLORS.surface }}>
+              <div style={{ marginTop: 12 }}>
+                <div className="eyebrow" style={{ color: COLORS.muted, marginBottom: 8 }}>Group Stage</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <Stepper label="W" value={r.w} max={3 - r.d} onChange={v => onUpdate({ w: v })} />
+                  <Stepper label="D" value={r.d} max={3 - r.w} onChange={v => onUpdate({ d: v })} />
+                  <div className="mono" style={{ flex: 1, textAlign: 'right', color: COLORS.muted, fontSize: 12 }}>
+                    {r.w * 3 + r.d} pts
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <div className="eyebrow" style={{ color: COLORS.muted, marginBottom: 8 }}>Advanced To</div>
+                <div style={{ display: 'flex', gap: 3 }}>
+                  {ADV.map((a, i) => {
+                    const active = r.adv === i;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => onUpdate({ adv: i })}
+                        className="mono"
+                        style={{
+                          flex: 1, padding: '8px 0', cursor: 'pointer',
+                          background: active ? COLORS.gold : COLORS.surfaceAlt,
+                          color: active ? COLORS.bg : COLORS.muted,
+                          fontSize: 11, fontWeight: active ? 600 : 500,
+                          border: `1px solid ${active ? COLORS.gold : COLORS.borderAlt}`,
+                          borderRadius: 2,
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        {a.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mono" style={{ textAlign: 'right', color: COLORS.muted, fontSize: 12, marginTop: 6 }}>
+                  +{ADV[r.adv].cum} from advancement
+                </div>
+              </div>
+
+              <div style={{
+                marginTop: 16, paddingTop: 12,
+                borderTop: `1px solid ${COLORS.borderAlt}`,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              }}>
+                <div className="mono" style={{ color: COLORS.muted, fontSize: 12 }}>
+                  base {r.base} × {r.mult}
+                </div>
+                <div className="mono" style={{ color: COLORS.gold, fontSize: 22, fontWeight: 500 }}>
+                  {r.contrib.toLocaleString()}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function Stepper({ label, value, max, onChange }) {
+      const dec = () => onChange(Math.max(0, value - 1));
+      const inc = () => onChange(Math.min(max, value + 1));
+      const decDisabled = value === 0;
+      const incDisabled = value >= max;
+
+      const btnStyle = (disabled) => ({
+        width: 36, height: 36,
+        background: COLORS.surfaceAlt,
+        color: disabled ? COLORS.ghost : COLORS.text,
+        border: `1px solid ${COLORS.borderAlt}`,
+        fontSize: 18, fontWeight: 400,
+        cursor: disabled ? 'default' : 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        borderRadius: 2,
+      });
+
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="eyebrow" style={{ color: COLORS.muted, width: 12 }}>{label}</span>
+          <button className="mono" style={btnStyle(decDisabled)} onClick={dec} disabled={decDisabled}>−</button>
+          <span className="mono" style={{
+            minWidth: 16, textAlign: 'center', fontSize: 16, color: COLORS.text,
+          }}>{value}</span>
+          <button className="mono" style={btnStyle(incDisabled)} onClick={inc} disabled={incDisabled}>+</button>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
