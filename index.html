@@ -114,6 +114,7 @@
 
       const sorted = [...rows];
       if (sortBy === 'rank') sorted.sort((a, b) => a.rank - b.rank);
+      if (sortBy === 'alpha') sorted.sort((a, b) => a.name.localeCompare(b.name));
       if (sortBy === 'contrib') sorted.sort((a, b) => b.contrib - a.contrib || a.rank - b.rank);
       if (sortBy === 'group') sorted.sort((a, b) => a.group.localeCompare(b.group) || a.rank - b.rank);
 
@@ -159,8 +160,9 @@
 
               <div style={{ marginTop: 16, display: 'flex', gap: 4 }}>
                 {[
-                  { k: 'rank', label: 'My Rank' },
-                  { k: 'contrib', label: 'Contribution' },
+                  { k: 'rank', label: 'Rank' },
+                  { k: 'alpha', label: 'A–Z' },
+                  { k: 'contrib', label: 'Contrib' },
                   { k: 'group', label: 'Group' },
                 ].map(t => (
                   <button
